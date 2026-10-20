@@ -45,6 +45,11 @@ Implemented:
 - Flyway migrations for tenant and import-batch tables
 - Database constraints for import ownership and duplicate content
 - Integration tests against MySQL for migrations and persistence
+- JPA mappings for tenants and import batches
+- Tenant-scoped import lookup and content-fingerprint lookup
+- Version field mapped for future optimistic concurrency control
+- Repository integration tests for persistence, tenant isolation,
+  and duplicate-content constraints
 
 Planned:
 - Payment, settlement, and bank-file imports
