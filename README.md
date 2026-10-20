@@ -35,6 +35,12 @@ Implemented:
 - Signed differences for shortfalls and excess credits
 - Ambiguous bank-credit detection and currency mismatch handling
 - Safeguards against settlement-line reuse across supplied batches
+- Combined payment-to-settlement and settlement-to-bank reconciliation
+- Shared settlement evidence across both reconciliation passes
+- Detection of bank credits without corresponding settlement batches
+- Independent outcome summaries for payments and settlement batches
+- Overall reconciliation status requiring both passes and orphan checks to pass
+- Tests proving that success in one pass cannot hide discrepancies in the other
 
 Planned:
 - Payment, settlement, and bank-file imports
