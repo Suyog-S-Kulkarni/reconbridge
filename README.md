@@ -55,6 +55,12 @@ Implemented:
 - Optimistic locking for versioned import updates
 - Deterministic MySQL tests using overlapping transactions
 - Verification that stale workers cannot overwrite committed import state
+- Transactional application service for import lifecycle operations
+- Tenant-scoped reads and transitions
+- Explicit expected-version checks alongside JPA optimistic locking
+- Immutable service snapshots containing persisted versions
+- Integration tests for committed transitions, stale requests,
+  tenant isolation, and rejected operations
 
 Planned:
 - Payment, settlement, and bank-file imports
