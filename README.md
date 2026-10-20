@@ -50,6 +50,11 @@ Implemented:
 - Version field mapped for future optimistic concurrency control
 - Repository integration tests for persistence, tenant isolation,
   and duplicate-content constraints
+- Guarded import lifecycle transitions with terminal READY and REJECTED states
+- Explicit retry transition for operationally failed imports
+- Optimistic locking for versioned import updates
+- Deterministic MySQL tests using overlapping transactions
+- Verification that stale workers cannot overwrite committed import state
 
 Planned:
 - Payment, settlement, and bank-file imports

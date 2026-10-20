@@ -167,6 +167,49 @@ public class ImportBatchEntity {
         this.rowCount = 0;
     }
 
+    public void startProcessing() {
+        requireStatus(ImportStatus.RECEIVED);
+        status = ImportStatus.PROCESSING;
+    }
+
+    public void markReady(long validatedRowCount) {
+        requireStatus(ImportStatus.PROCESSING);
+
+        if (validatedRowCount < 0) {
+            throw new IllegalArgumentException(
+                    "Validated row count must not be negative"
+            );
+        }
+
+        rowCount = validatedRowCount;
+        status = ImportStatus.READY;
+    }
+
+    public void reject() {
+        requireStatus(ImportStatus.PROCESSING);
+        status = ImportStatus.REJECTED;
+    }
+
+    public void fail() {
+        requireStatus(ImportStatus.PROCESSING);
+        status = ImportStatus.FAILED;
+    }
+
+    public void retryProcessing() {
+        requireStatus(ImportStatus.FAILED);
+        status = ImportStatus.PROCESSING;
+    }
+
+    private void requireStatus(ImportStatus expected) {
+        if (status != expected) {
+            throw new IllegalStateException(
+                    "Import " + id
+                            + " must be " + expected
+                            + " for this operation, but is " + status
+            );
+        }
+    }
+
     private static String requireText(
             String value,
             String fieldName,
