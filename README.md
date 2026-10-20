@@ -41,6 +41,10 @@ Implemented:
 - Independent outcome summaries for payments and settlement batches
 - Overall reconciliation status requiring both passes and orphan checks to pass
 - Tests proving that success in one pass cannot hide discrepancies in the other
+- MySQL application and test databases with separate credentials
+- Flyway migrations for tenant and import-batch tables
+- Database constraints for import ownership and duplicate content
+- Integration tests against MySQL for migrations and persistence
 
 Planned:
 - Payment, settlement, and bank-file imports
@@ -52,6 +56,21 @@ Planned:
 - Kafka event delivery with a transactional outbox
 - Container-based integration tests
 - Kubernetes deployment exercises
+
+## Database configuration
+
+Application:
+- Schema: reconbridge
+- User: reconbridge_app
+- Password environment variable: RECONBRIDGE_DB_PASSWORD
+
+Tests:
+- Schema: reconbridge_test
+- User: reconbridge_test_app
+- Password environment variable: RECONBRIDGE_TEST_DB_PASSWORD
+
+MySQL must be running before application startup or integration tests.
+Flyway applies migrations automatically.
 
 ## Problem statement
 
