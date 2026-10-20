@@ -101,3 +101,9 @@ See the `docs` directory for the project requirements and architecture.
 
 This is a learning and portfolio project using synthetic data.
 It does not initiate real payments or connect to live bank accounts.
+
+## Implemented
+- Immutable monetary values with currency validation and overflow protection
+- Tenant-aware and provider-aware matching keys
+- Source types and matching outcome definitions
+- Domain unit tests covering settlement calculations and matching-key behavior
