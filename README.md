@@ -107,3 +107,9 @@ It does not initiate real payments or connect to live bank accounts.
 - Tenant-aware and provider-aware matching keys
 - Source types and matching outcome definitions
 - Domain unit tests covering settlement calculations and matching-key behavior
+- Payment and settlement domain models with monetary validation
+- Strategy-based exact-reference payment matching
+- HashMap candidate indexing that preserves ambiguous references
+- Detection of missing counterparts, amount mismatches, and currency mismatches
+- Duplicate input safeguards and immutable matching results
+- Unit tests for matching decisions and settlement validation
