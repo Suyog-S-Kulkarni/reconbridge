@@ -29,6 +29,12 @@ Implemented:
 - Separate reporting of unresolved payments and orphan settlement lines
 - Immutable report snapshots and explicit empty-input behavior
 - Unit tests covering mixed outcomes and orphan detection
+- Settlement batch validation against declared net totals
+- Exact-reference settlement-to-bank credit matching
+- Bank-account-aware settlement identities
+- Signed differences for shortfalls and excess credits
+- Ambiguous bank-credit detection and currency mismatch handling
+- Safeguards against settlement-line reuse across supplied batches
 
 Planned:
 - Payment, settlement, and bank-file imports
