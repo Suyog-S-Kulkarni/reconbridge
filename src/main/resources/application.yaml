@@ -33,3 +33,9 @@ management:
   endpoint:
     health:
       show-details: never
+
+reconbridge:
+  security:
+    issuer: http://localhost:8081/realms/reconbridge
+    jwk-set-uri: http://localhost:8081/realms/reconbridge/protocol/openid-connect/certs
+    audience: reconbridge-api

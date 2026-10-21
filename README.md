@@ -6,6 +6,15 @@ ReconBridge is a Java backend portfolio project that will compare
 internal payment records, processor settlement reports, and bank
 credits to identify discrepancies and support controlled investigation.
 
+## Problem statement
+
+Payment success does not by itself prove that the expected settlement
+reached the bank. Fees, delayed credits, missing records, duplicates,
+and incorrect amounts can cause differences between systems.
+
+ReconBridge will preserve source evidence, explain matching decisions,
+and track unresolved differences through an auditable review process.
+
 ## Project status
 
 Foundation stage.
@@ -61,6 +70,13 @@ Implemented:
 - Immutable service snapshots containing persisted versions
 - Integration tests for committed transitions, stale requests,
   tenant isolation, and rejected operations
+- Keycloak JWT authentication with issuer, timestamp, audience,
+    and tenant-claim validation
+- Administrator-controlled tenant identity
+- Explicit mapping of application realm roles
+- Stateless security with endpoints denied unless explicitly permitted
+- Authenticated identity endpoint at GET /api/me
+- Automated claim-validation and HTTP authorization tests
 
 Planned:
 - Payment, settlement, and bank-file imports
@@ -88,14 +104,6 @@ Tests:
 MySQL must be running before application startup or integration tests.
 Flyway applies migrations automatically.
 
-## Problem statement
-
-Payment success does not by itself prove that the expected settlement
-reached the bank. Fees, delayed credits, missing records, duplicates,
-and incorrect amounts can cause differences between systems.
-
-ReconBridge will preserve source evidence, explain matching decisions,
-and track unresolved differences through an auditable review process.
 
 ## Example
 
@@ -104,6 +112,14 @@ and track unresolved differences through an auditable review process.
 - Expected bank credit: INR 2,940
 - Actual bank credit: INR 2,900
 - Difference to investigate: INR 40
+
+### Authentication and tenant identity
+
+- Secured the API using Spring Security OAuth2 Resource Server and Keycloak.
+- Validates JWT issuer, audience, and tenant identity.
+- Maps supported Keycloak realm roles to application authorities.
+- Provides GET /api/me to return the authenticated subject and tenant ID.
+- Includes automated security tests and manual Postman verification.
 
 ## Current technology
 
@@ -155,9 +171,11 @@ Expected response:
 Tenant validation will be implemented before business endpoints
 are exposed.
 
-## Documentation
+### Project documentation
 
-See the `docs` directory for the project requirements and architecture.
+See [Project requirements and architecture](docs/ReconBridge_Project_Requirements_and_Architecture.docx)
+for architecture diagrams, implementation progress, and a separate PowerShell
+command reference with explanations.
 
 ## Scope
 
