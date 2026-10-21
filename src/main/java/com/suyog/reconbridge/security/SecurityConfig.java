@@ -57,11 +57,10 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http
     ) throws Exception {
-
-        JwtAuthenticationConverter authenticationConverter =
+        JwtAuthenticationConverter converter =
                 new JwtAuthenticationConverter();
 
-        authenticationConverter.setJwtGrantedAuthoritiesConverter(
+        converter.setJwtGrantedAuthoritiesConverter(
                 this::applicationAuthorities
         );
 
@@ -76,6 +75,10 @@ public class SecurityConfig {
                                 "/actuator/health"
                         ).permitAll()
                         .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/imports"
+                        ).hasRole("IMPORTER")
+                        .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/me",
                                 "/api/imports/{importId}"
@@ -89,9 +92,7 @@ public class SecurityConfig {
                 )
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt
-                                .jwtAuthenticationConverter(
-                                        authenticationConverter
-                                )
+                                .jwtAuthenticationConverter(converter)
                         )
                 );
 
@@ -99,7 +100,6 @@ public class SecurityConfig {
     }
 
     private Collection<GrantedAuthority> applicationAuthorities(Jwt jwt) {
-
         Object realmAccess = jwt.getClaims().get("realm_access");
 
         if (!(realmAccess instanceof Map<?, ?> realmMap)) {
@@ -117,7 +117,6 @@ public class SecurityConfig {
         for (Object value : roleValues) {
             if (value instanceof String role
                     && APPLICATION_ROLES.contains(role)) {
-
                 authorities.add(
                         new SimpleGrantedAuthority("ROLE_" + role)
                 );

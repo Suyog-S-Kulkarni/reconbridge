@@ -121,6 +121,23 @@ Flyway applies migrations automatically.
 - Provides GET /api/me to return the authenticated subject and tenant ID.
 - Includes automated security tests and manual Postman verification.
 
+### Import registration
+
+- Added POST /api/imports, restricted to the IMPORTER role.
+- Derives tenant identity from the validated Keycloak JWT.
+- Validates source metadata, business date, and SHA-256 hash format.
+- Registers imports in RECEIVED status with an initial row count of zero.
+- Returns 201 Created with a Location header.
+- Rejects duplicate content within the same tenant, source type,
+  and source system with 409 Conflict.
+- Uses a database uniqueness constraint to protect concurrent registration.
+- Allows separate tenants to register identical content independently.
+- Includes integration tests for validation, authorization, tenant isolation,
+  transaction rollback, and competing registrations.
+
+Registration currently stores metadata only. File upload, actual content
+hash verification, CSV parsing, and reconciliation processing are upcoming.
+
 ## Current technology
 
 - Java 21
