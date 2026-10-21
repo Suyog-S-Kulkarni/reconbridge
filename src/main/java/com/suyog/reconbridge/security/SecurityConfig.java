@@ -35,14 +35,13 @@ public class SecurityConfig {
     );
 
     @Bean
-    JwtDecoder jwtDecoder(
+    public JwtDecoder jwtDecoder(
             @Value("${reconbridge.security.issuer}") String issuer,
             @Value("${reconbridge.security.jwk-set-uri}") String jwkSetUri,
             @Value("${reconbridge.security.audience}") String audience
     ) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder
-                .withJwkSetUri(jwkSetUri)
-                .build();
+        NimbusJwtDecoder decoder =
+                NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
 
         decoder.setJwtValidator(
                 new DelegatingOAuth2TokenValidator<>(
@@ -55,23 +54,21 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(
+    public SecurityFilterChain securityFilterChain(
             HttpSecurity http
     ) throws Exception {
 
-        JwtAuthenticationConverter converter =
+        JwtAuthenticationConverter authenticationConverter =
                 new JwtAuthenticationConverter();
 
-        converter.setJwtGrantedAuthoritiesConverter(
+        authenticationConverter.setJwtGrantedAuthoritiesConverter(
                 this::applicationAuthorities
         );
 
         http
                 .csrf(csrf -> csrf.disable())
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS
-                        )
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
@@ -80,7 +77,8 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(
                                 HttpMethod.GET,
-                                "/api/me"
+                                "/api/me",
+                                "/api/imports/{importId}"
                         ).hasAnyRole(
                                 "IMPORTER",
                                 "ANALYST",
@@ -89,18 +87,19 @@ public class SecurityConfig {
                         )
                         .anyRequest().denyAll()
                 )
-                .oauth2ResourceServer(resourceServer ->
-                        resourceServer.jwt(jwt ->
-                                jwt.jwtAuthenticationConverter(converter)
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .jwt(jwt -> jwt
+                                .jwtAuthenticationConverter(
+                                        authenticationConverter
+                                )
                         )
                 );
 
         return http.build();
     }
 
-    private Collection<GrantedAuthority> applicationAuthorities(
-            Jwt jwt
-    ) {
+    private Collection<GrantedAuthority> applicationAuthorities(Jwt jwt) {
+
         Object realmAccess = jwt.getClaims().get("realm_access");
 
         if (!(realmAccess instanceof Map<?, ?> realmMap)) {
@@ -118,6 +117,7 @@ public class SecurityConfig {
         for (Object value : roleValues) {
             if (value instanceof String role
                     && APPLICATION_ROLES.contains(role)) {
+
                 authorities.add(
                         new SimpleGrantedAuthority("ROLE_" + role)
                 );

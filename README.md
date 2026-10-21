@@ -182,5 +182,17 @@ command reference with explanations.
 This is a learning and portfolio project using synthetic data.
 It does not initiate real payments or connect to live bank accounts.
 
+### Tenant-scoped import retrieval
+
+- Added GET /api/imports/{importId}.
+- Derives tenant identity from the validated JWT tenant_id claim.
+- Retrieves imports using both tenant ID and import ID.
+- Returns 404 for missing imports and imports owned by another tenant.
+- Ignores caller-supplied tenant IDs in query parameters and headers.
+- Returns structured errors for missing imports and invalid UUIDs.
+- Automated test suite: 100 tests passed.
+- Manually verified with real Keycloak tokens: own-tenant access (200), cross-tenant access (404),
+    missing authentication (401), and malformed import IDs (400).
+
 
 
