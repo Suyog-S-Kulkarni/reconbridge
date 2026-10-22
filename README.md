@@ -151,6 +151,28 @@ are the next implementation stages.
 
 The JDBC batch size does not split the transaction. The rollback integration test deliberately fails a later insert and verifies that earlier inserts and the JPA update are rolled back.
 
+### Bank-credit persistence
+
+Added a Flyway migration for tenant-scoped bank-credit storage.
+
+BankCreditPersistenceService saves credits and transitions a BANK_STATEMENT
+import from PROCESSING to READY in one transaction.
+
+Completion validates tenant ownership, source type, lifecycle state,
+expected version, and duplicate credit IDs.
+
+The versioned import update is flushed before credit insertion.
+A later persistence failure rolls back both the inserted credits and
+the READY transition.
+
+Distinct credits with the same settlement matching key are preserved
+for ambiguity detection during reconciliation.
+
+Integration tests cover successful completion, stale-version rejection,
+tenant isolation, invalid inputs, and rollback after a later insert fails.
+
+Bank statement processing is not yet connected to the HTTP endpoint.
+
 ### Settlement evidence API
 
 Processed processor settlement imports expose paginated batch and line
