@@ -118,6 +118,27 @@ These lifecycle operations exist at the service layer. Automatic failure classif
 - Enforces a default maximum of 100,000 data records.
 - Reports content errors as `CsvValidationException`; technical read failures remain `IOException`.
 
+
+### Bank statement CSV parsing
+
+Implemented a bank-credit CSV parser using Apache Commons CSV.
+
+The parser:
+- Receives tenant identity from trusted application code.
+- Validates headers, UUIDs, required fields, positive minor-unit amounts,
+  currency codes, and UTF-8 encoding.
+- Rejects duplicate credit IDs within a file.
+- Preserves distinct credits sharing a settlement key so reconciliation
+  can detect ambiguous matches.
+- Limits input to 10 MiB and 100,000 data records.
+- Returns an immutable list of validated BankCredit objects.
+
+Parser unit tests cover valid input, duplicate IDs, invalid values,
+encoding, quoted fields, malformed CSV, and file-size validation.
+
+Bank-credit database persistence and processing-endpoint integration
+are the next implementation stages.
+
 ### Atomic settlement persistence
 
 - Uses tenant- and import-scoped composite keys and foreign keys for settlement evidence.
