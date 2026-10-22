@@ -130,6 +130,28 @@ These lifecycle operations exist at the service layer. Automatic failure classif
 
 The JDBC batch size does not split the transaction. The rollback integration test deliberately fails a later insert and verifies that earlier inserts and the JPA update are rolled back.
 
+### Settlement evidence API
+
+Processed processor settlement imports expose paginated batch and line
+read endpoints:
+
+- GET /api/imports/{importId}/settlement-batches
+- GET /api/imports/{importId}/settlement-batches/{batchId}/lines
+
+Both endpoints derive tenant identity from the validated JWT and permit
+IMPORTER, ANALYST, APPROVER, and AUDITOR roles.
+
+Evidence is available only for PROCESSOR_SETTLEMENT imports in READY status.
+Missing imports and imports belonging to another tenant return 404.
+
+Pagination uses zero-based page numbers. The default page size is 20,
+with an allowed range of 1–100. Responses include items, page, size,
+totalElements, and totalPages.
+
+Service unit tests cover pagination, ownership lookup, source and status
+validation, missing batches, and empty pages. HTTP access and database
+retrieval are verified separately through Postman.
+
 ## Design patterns and data structures
 
 | Technique | Where it is used |
