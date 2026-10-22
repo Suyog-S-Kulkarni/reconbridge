@@ -157,6 +157,7 @@ Base URL: `http://localhost:8083`
 | GET | `/api/imports/{importId}` | No body | Any application role; own tenant only |
 | POST | `/api/imports` | `application/json` | `IMPORTER` |
 | POST | `/api/imports` | `multipart/form-data` | `IMPORTER` |
+| POST | /api/imports/{importId}/process | Process an uploaded settlement import | IMPORTER |
 
 Use the access token as `Authorization: Bearer <access-token>`. Obtain a fresh token when it expires. Never commit tokens, passwords, or client secrets.
 
@@ -411,6 +412,22 @@ Manual Postman checks covered identity, own-tenant retrieval, cross-tenant denia
 - Internal payment and bank statement parsers/persistence are not implemented yet, although their domain models and matching strategies exist.
 - Exception investigation, independent approval, and audit workflow are planned features.
 - No live bank integrations or payment initiation are implemented.
+
+### End-to-end settlement import processing
+
+- Added POST /api/imports/{importId}/process, restricted to IMPORTER.
+- Verifies tenant ownership and server-recorded file ownership.
+- Claims RECEIVED imports using the expected optimistic version.
+- Reads the stored file and verifies its SHA-256 hash before parsing.
+- Persists settlement batches and lines together with the READY transition.
+- Marks invalid CSV as REJECTED and technical failures as FAILED when
+  the failure transition can be committed.
+- Prevents stale workers from overwriting newer import state.
+- Includes integration tests for processing, authorization, integrity
+  failures, competing requests, and transaction rollback.
+
+Processing is currently synchronous. Automatic recovery of abandoned
+PROCESSING imports, retry endpoints, and persisted error history remain planned.
 
 ## Next milestones
 
