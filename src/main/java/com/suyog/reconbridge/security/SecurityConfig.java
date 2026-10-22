@@ -26,8 +26,13 @@ import java.util.Set;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
-    private static final Set<String> APPLICATION_ROLES =
-            Set.of("IMPORTER", "ANALYST", "APPROVER", "AUDITOR");
+
+    private static final Set<String> APPLICATION_ROLES = Set.of(
+            "IMPORTER",
+            "ANALYST",
+            "APPROVER",
+            "AUDITOR"
+    );
 
     @Bean
     public JwtDecoder jwtDecoder(
@@ -35,46 +40,104 @@ public class SecurityConfig {
             @Value("${reconbridge.security.jwk-set-uri}") String jwkSetUri,
             @Value("${reconbridge.security.audience}") String audience
     ) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(issuer),
-                new ReconBridgeClaimsValidator(audience)));
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
+                .withJwkSetUri(jwkSetUri)
+                .build();
+
+        decoder.setJwtValidator(
+                new DelegatingOAuth2TokenValidator<>(
+                        JwtValidators.createDefaultWithIssuer(issuer),
+                        new ReconBridgeClaimsValidator(audience)
+                )
+        );
+
         return decoder;
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(this::applicationAuthorities);
-        http.csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http
+    ) throws Exception {
+        JwtAuthenticationConverter converter =
+                new JwtAuthenticationConverter();
+
+        converter.setJwtGrantedAuthoritiesConverter(
+                this::applicationAuthorities
+        );
+
+        http
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/imports", "/api/imports/{importId}/process")
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/actuator/health"
+                        )
+                        .permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/imports",
+                                "/api/imports/{importId}/process"
+                        )
                         .hasRole("IMPORTER")
-                        .requestMatchers(HttpMethod.GET, "/api/me", "/api/imports/{importId}")
-                        .hasAnyRole("IMPORTER", "ANALYST", "APPROVER", "AUDITOR")
-                        .anyRequest().denyAll())
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/me",
+                                "/api/imports/{importId}",
+                                "/api/imports/{importId}/settlement-batches",
+                                "/api/imports/{importId}/settlement-batches/{batchId}/lines"
+                        )
+                        .hasAnyRole(
+                                "IMPORTER",
+                                "ANALYST",
+                                "APPROVER",
+                                "AUDITOR"
+                        )
+
+                        .anyRequest()
+                        .denyAll()
+                )
                 .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(converter)));
+                        .jwt(jwt -> jwt
+                                .jwtAuthenticationConverter(converter)
+                        )
+                );
+
         return http.build();
     }
 
-    private Collection<GrantedAuthority> applicationAuthorities(Jwt jwt) {
+    private Collection<GrantedAuthority> applicationAuthorities(
+            Jwt jwt
+    ) {
         Object realmAccess = jwt.getClaims().get("realm_access");
+
         if (!(realmAccess instanceof Map<?, ?> realmMap)) {
             return List.of();
         }
+
         Object roles = realmMap.get("roles");
+
         if (!(roles instanceof Collection<?> values)) {
             return List.of();
         }
+
         List<GrantedAuthority> authorities = new ArrayList<>();
+
         for (Object value : values) {
-            if (value instanceof String role && APPLICATION_ROLES.contains(role)) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+            if (value instanceof String role
+                    && APPLICATION_ROLES.contains(role)) {
+                authorities.add(
+                        new SimpleGrantedAuthority("ROLE_" + role)
+                );
             }
         }
+
         return authorities;
     }
 }
