@@ -494,6 +494,28 @@ Manual Postman checks covered identity, own-tenant retrieval, cross-tenant denia
 Processing is currently synchronous. Automatic recovery of abandoned
 PROCESSING imports, retry endpoints, and persisted error history remain planned.
 
+### Bank statement processing
+
+The existing POST /api/imports/{importId}/process endpoint now dispatches
+PROCESSOR_SETTLEMENT and BANK_STATEMENT imports to their respective processors.
+
+Bank processing:
+1. Claims a tenant-owned RECEIVED import using its expected version.
+2. Requires server-managed uploaded-file ownership.
+3. Reads the stored file and verifies its SHA-256 hash.
+4. Parses and validates bank-credit CSV records.
+5. Persists credits and transitions the import to READY atomically.
+
+Invalid CSV contents result in REJECTED. Storage and persistence failures
+result in FAILED when that state transition can be committed.
+Stale workers cannot overwrite a newer import version.
+
+Integration tests cover successful processing, invalid CSV, missing and
+modified files, replay prevention, tenant isolation, role enforcement,
+and overlapping processing requests.
+
+Internal payment processing and automatic retry/recovery remain unimplemented.
+
 ## Next milestones
 
 1. Connect tenant-scoped import claiming, stored-file reading, hash verification, parsing, and atomic persistence.

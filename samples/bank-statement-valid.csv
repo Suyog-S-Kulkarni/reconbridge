@@ -1,0 +1,3 @@
+﻿bank_credit_id,provider,bank_account_reference,settlement_reference,amount_minor,currency
+aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa,PROCESSOR_A,BANK-001,SET-001,12400,INR
+bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb,PROCESSOR_A,BANK-001,SET-002,24700,INR

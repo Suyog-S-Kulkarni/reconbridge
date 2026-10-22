@@ -1,6 +1,6 @@
 package com.suyog.reconbridge.api;
 
-import com.suyog.reconbridge.application.SettlementImportProcessingService;
+import com.suyog.reconbridge.application.ImportProcessingService;
 import com.suyog.reconbridge.application.model.ImportProcessingResult;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +18,12 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/imports")
 public class ImportProcessingController {
-    private final SettlementImportProcessingService processing;
 
-    public ImportProcessingController(SettlementImportProcessingService processing) {
+    private final ImportProcessingService processing;
+
+    public ImportProcessingController(
+            ImportProcessingService processing
+    ) {
         this.processing = processing;
     }
 
@@ -31,14 +34,25 @@ public class ImportProcessingController {
             @Valid @RequestBody ProcessImportRequest request,
             @AuthenticationPrincipal Jwt jwt
     ) {
-        UUID tenantId = UUID.fromString(jwt.getClaimAsString("tenant_id"));
-        ImportProcessingResult result = processing.process(tenantId, importId, request.expectedVersion());
+        UUID tenantId = UUID.fromString(
+                jwt.getClaimAsString("tenant_id")
+        );
+
+        ImportProcessingResult result = processing.process(
+                tenantId,
+                importId,
+                request.expectedVersion()
+        );
+
         int status = switch (result.imported().status()) {
             case READY -> 200;
             case REJECTED -> 422;
             case FAILED -> 500;
-            default -> throw new IllegalStateException("Unexpected processing result status");
+            default -> throw new IllegalStateException(
+                    "Unexpected processing result status"
+            );
         };
+
         return ResponseEntity.status(status).body(result);
     }
 }
