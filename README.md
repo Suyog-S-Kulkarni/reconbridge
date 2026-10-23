@@ -195,6 +195,25 @@ Service unit tests cover pagination, ownership lookup, source and status
 validation, missing batches, and empty pages. HTTP access and database
 retrieval are verified separately through Postman.
 
+### Reconciliation preview verification
+
+Service unit tests cover report assembly, tenant-scoped import lookup,
+and readiness validation.
+
+MySQL-backed HTTP integration tests cover:
+- All five settlement matching outcomes.
+- Orphan bank-credit detection.
+- Difference calculation and report totals.
+- Tenant isolation when evidence IDs are reused.
+- Rejection of mixed-tenant import pairs.
+- Auditor access, missing authentication, and missing application roles.
+- Invalid source types, import states, and request parameters.
+- Missing evidence for an import marked READY.
+- Preservation of import status and version during preview.
+
+JWT decoding is mocked in these integration tests.
+Live Keycloak token acquisition is verified separately through Postman.
+
 ## Design patterns and data structures
 
 | Technique | Where it is used |
