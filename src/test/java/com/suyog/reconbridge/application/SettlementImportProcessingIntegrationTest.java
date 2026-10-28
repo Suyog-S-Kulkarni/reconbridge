@@ -219,10 +219,26 @@ class SettlementImportProcessingIntegrationTest {
 
     @Test
     void wrongSourceCannotBeClaimed() throws Exception {
-        UUID id = upload(VALID, "BANK_STATEMENT");
-        process("a", id, 0).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("UNSUPPORTED_SOURCE"));
-        assertThat(lifecycle.get(tenantA, id).status()).isEqualTo(ImportStatus.RECEIVED);
+        UUID id = upload(VALID, "INTERNAL_PAYMENT");
+
+        process("a", id, 0)
+                .andExpect(status().isConflict())
+                .andExpect(
+                        jsonPath("$.code").value("UNSUPPORTED_SOURCE")
+                );
+
+        ImportBatchSnapshot current = lifecycle.get(tenantA, id);
+
+        assertThat(current.status())
+                .isEqualTo(ImportStatus.RECEIVED);
+
+        assertThat(current.version())
+                .isZero();
+
+        assertThat(current.rowCount())
+                .isZero();
+
+        assertNoEvidence(id);
     }
 
     @Test
