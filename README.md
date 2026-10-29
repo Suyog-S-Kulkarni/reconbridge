@@ -2,15 +2,37 @@
 
 **Settlement Reconciliation & Exception Management**
 
-ReconBridge is a Java backend portfolio project for comparing internal payments, processor settlements, and bank credits. It implements two-pass reconciliation domain logic, tenant-isolated import APIs, CSV upload and validation, and transactional settlement persistence.
+ReconBridge is a Java 21 and Spring Boot backend portfolio project that reconciles processor settlement batches against bank credits and supports tenant-isolated exception investigation. It demonstrates secure REST APIs, transactional persistence, idempotency, concurrency control, SQL pagination, and strategy-based matching.
 
-**Current milestone:** settlement records and the import's `READY` transition can be persisted atomically. The parser and persistence service are tested components; the end-to-end worker that reads an uploaded file and invokes them is the next implementation step.
+The domain layer also supports internal-payment-to-settlement matching and combined two-pass reports. Persistent internal-payment ingestion is still planned; the current stored-run API reconciles settlement and bank imports.
+
+**Current scope:** CSV upload and processing, persisted reconciliation runs, run history and unresolved-result queries, exception-case opening and claiming, investigation notes, and paginated case and note queries. Resolution proposals and independent approval are next.
+
+## Contents
+
+- [Problem statement](#problem-statement)
+- [Implementation status](#implementation-status)
+- [Technology stack](#technology-stack)
+- [Architecture and processing flow](#architecture-and-processing-flow)
+- [Implemented capabilities](#implemented-capabilities)
+- [Design patterns and data structures](#design-patterns-and-data-structures)
+- [API reference](#api-reference)
+- [Postman workflow](#postman-workflow)
+- [CSV contracts](#csv-contracts)
+- [Persistence model](#persistence-model)
+- [Local configuration](#local-configuration)
+- [PowerShell command reference](#powershell-command-reference)
+- [Testing and verification](#testing-and-verification)
+- [Current limitations](#current-limitations)
+- [Roadmap](#roadmap)
+- [Project documentation](#project-documentation)
+- [Scope](#scope)
 
 ## Problem statement
 
 A successful payment does not prove that the expected settlement reached the bank. Fees, missing records, duplicate references, delayed credits, currency differences, and incorrect amounts can produce discrepancies between systems.
 
-ReconBridge compares payment evidence with processor settlement lines, then compares settlement batch totals with bank credits. Matching reports explain discrepancies and preserve ambiguous candidates. The planned investigation workflow will add controlled review, independent approval, and audit history.
+ReconBridge compares payment evidence with processor settlement lines, then compares settlement batch totals with bank credits. Matching reports explain discrepancies and preserve ambiguous candidates. Exception cases let analysts claim discrepancies and record investigation notes. Resolution proposals, independent approval, and a complete decision audit trail are planned.
 
 ### Example
 
@@ -24,21 +46,24 @@ ReconBridge compares payment evidence with processor settlement lines, then comp
 
 ## Implementation status
 
-| Area | Current status |
+| Area | Status |
 | --- | --- |
-| Monetary values and matching keys | Implemented and tested |
-| Payment-to-settlement matching | Implemented and tested as domain logic |
-| Settlement-to-bank matching and combined reports | Implemented and tested as domain logic |
-| MySQL, Flyway, import lifecycle, and optimistic locking | Implemented and tested |
-| Keycloak authentication and tenant-scoped import APIs | Implemented and tested |
-| Metadata registration and actual CSV upload | Implemented and tested |
-| Processor settlement CSV parser | Implemented and tested |
-| Atomic settlement persistence and `READY` transition | Implemented; latest local build reported successful |
-| Stored-file reading, hash re-verification, and processing coordinator | Next milestone |
-| Reconciliation over selected persisted imports | Planned |
-| Exception review, audit workflow, Kafka, and Kubernetes | Planned |
+| Monetary values, matching keys, and matching strategies | Implemented |
+| Payment-to-settlement matching and combined two-pass reports | Implemented as domain logic |
+| Settlement and bank CSV upload, parsing, and persistence | Implemented |
+| Stored-file ownership checks, SHA-256 verification, and synchronous processing | Implemented |
+| Import lifecycle and optimistic concurrency control | Implemented |
+| Keycloak JWT authentication, RBAC, and tenant isolation | Implemented |
+| Settlement evidence queries and bank reconciliation preview | Implemented |
+| Atomic saved reconciliation runs and request idempotency | Implemented |
+| Paginated run history and unresolved-result queries | Implemented |
+| Exception-case opening, retrieval, claiming, and investigation notes | Implemented |
+| Paginated case listing, assignment/status filters, and note history | Added in the latest milestone; confirm with the local test suite |
+| Resolution proposals and independent approval | Next milestone |
+| Persisted internal-payment ingestion and stored three-source reconciliation | Planned |
+| Automatic recovery, transactional outbox, Kafka, and Kubernetes | Planned |
 
-Uploading currently creates a `RECEIVED` import. It does not automatically parse the file, persist settlement rows, or run reconciliation. `rowCount` remains zero until processing completes successfully.
+Uploading creates a `RECEIVED` import. Processing is a separate API call; upload does not automatically parse or reconcile a file. `rowCount` remains zero until processing completes successfully.
 
 ## Technology stack
 
@@ -49,14 +74,35 @@ Uploading currently creates a `RECEIVED` import. It does not automatically parse
 | Spring Security OAuth2 Resource Server / Keycloak | JWT validation, realm-role mapping, tenant identity |
 | Jakarta Bean Validation | API request validation |
 | Spring Data JPA / Hibernate | Tenant and import mappings, optimistic version checks |
-| Spring JDBC / JdbcTemplate | Prepared settlement inserts and JDBC batching |
+| Spring JDBC / JdbcTemplate | Evidence and report persistence, JDBC batching, and paginated read queries |
 | MySQL / Flyway | Relational integrity and versioned schema migrations |
-| Apache Commons CSV 1.14.1 | Processor settlement CSV parsing |
+| Apache Commons CSV 1.14.1 | Settlement and bank statement CSV parsing |
 | Spring Boot Actuator | Health endpoint |
 | JUnit / AssertJ / Mockito / MockMvc | Unit and integration testing |
 | Maven Wrapper / Git / Postman | Build, version control, and manual API verification |
 
 Kafka, transactional outbox delivery, Docker/Testcontainers, and Kubernetes are roadmap items. Spring Batch remains a possible future option, not an implemented dependency.
+
+## Architecture and processing flow
+
+The HTTP layer validates requests and enforces roles. Application services establish tenant-scoped transaction boundaries, domain objects enforce business rules, and repositories persist evidence and snapshots.
+
+```mermaid
+flowchart TD
+    A["IMPORTER uploads CSV"] --> B["RECEIVED import and stored file"]
+    B --> C["Processing request checks tenant and version"]
+    C --> D["Claim: PROCESSING"]
+    D --> E["Verify file hash and parse contents"]
+    E -->|Valid| F["Commit evidence and READY atomically"]
+    E -->|Invalid content| G["REJECTED"]
+    E -->|Technical failure| H["FAILED"]
+    F --> I["ANALYST creates an idempotent reconciliation run"]
+    I --> J["Stored report and unresolved results"]
+    J --> K["Open and claim an exception case"]
+    K --> L["Record and review investigation notes"]
+```
+
+Failure transitions are attempted only while the worker still owns the expected import version. A stale worker must not overwrite newer state. File reading and parsing occur outside the short database transactions used for claiming and completion.
 
 ## Implemented capabilities
 
@@ -105,8 +151,6 @@ JSON registration validates the supplied hash's format but does not verify file 
 - Service responses are immutable snapshots containing the persisted version.
 - Integration tests verify that stale workers cannot overwrite committed state.
 
-These lifecycle operations exist at the service layer. Automatic failure classification, retry orchestration, and an HTTP processing endpoint are not yet wired into upload.
-
 ### Processor settlement CSV validation
 
 - Requires the documented header order and validates UTF-8, with optional byte-order mark support.
@@ -117,7 +161,6 @@ These lifecycle operations exist at the service layer. Automatic failure classif
 - Derives tenant and provider from trusted import context; neither is accepted as a CSV column.
 - Enforces a default maximum of 100,000 data records.
 - Reports content errors as `CsvValidationException`; technical read failures remain `IOException`.
-
 
 ### Bank statement CSV parsing
 
@@ -135,9 +178,6 @@ The parser:
 
 Parser unit tests cover valid input, duplicate IDs, invalid values,
 encoding, quoted fields, malformed CSV, and file-size validation.
-
-Bank-credit database persistence and processing-endpoint integration
-are the next implementation stages.
 
 ### Atomic settlement persistence
 
@@ -171,7 +211,43 @@ for ambiguity detection during reconciliation.
 Integration tests cover successful completion, stale-version rejection,
 tenant isolation, invalid inputs, and rollback after a later insert fails.
 
-Bank statement processing is not yet connected to the HTTP endpoint.
+### End-to-end settlement import processing
+
+- Added POST /api/imports/{importId}/process, restricted to IMPORTER.
+- Verifies tenant ownership and server-recorded file ownership.
+- Claims RECEIVED imports using the expected optimistic version.
+- Reads the stored file and verifies its SHA-256 hash before parsing.
+- Persists settlement batches and lines together with the READY transition.
+- Marks invalid CSV as REJECTED and technical failures as FAILED when
+  the failure transition can be committed.
+- Prevents stale workers from overwriting newer import state.
+- Includes integration tests for processing, authorization, integrity
+  failures, competing requests, and transaction rollback.
+
+Processing is currently synchronous. Automatic recovery of abandoned
+PROCESSING imports, retry endpoints, and persisted error history remain planned.
+
+### Bank statement processing
+
+The existing POST /api/imports/{importId}/process endpoint now dispatches
+PROCESSOR_SETTLEMENT and BANK_STATEMENT imports to their respective processors.
+
+Bank processing:
+1. Claims a tenant-owned RECEIVED import using its expected version.
+2. Requires server-managed uploaded-file ownership.
+3. Reads the stored file and verifies its SHA-256 hash.
+4. Parses and validates bank-credit CSV records.
+5. Persists credits and transitions the import to READY atomically.
+
+Invalid CSV contents result in REJECTED. Storage and persistence failures
+result in FAILED when that state transition can be committed.
+Stale workers cannot overwrite a newer import version.
+
+Integration tests cover successful processing, invalid CSV, missing and
+modified files, replay prevention, tenant isolation, role enforcement,
+and overlapping processing requests.
+
+Internal payment processing and automatic retry/recovery remain unimplemented.
 
 ### Settlement evidence API
 
@@ -195,24 +271,44 @@ Service unit tests cover pagination, ownership lookup, source and status
 validation, missing batches, and empty pages. HTTP access and database
 retrieval are verified separately through Postman.
 
-### Reconciliation preview verification
+### Bank reconciliation preview
 
-Service unit tests cover report assembly, tenant-scoped import lookup,
-and readiness validation.
+`GET /api/reconciliation/bank-preview` compares explicitly selected, tenant-owned `READY` settlement and bank imports without saving a run or modifying their status/version. It validates source types and persisted evidence, reports all five matching outcomes, and includes orphan bank credits.
 
-MySQL-backed HTTP integration tests cover:
-- All five settlement matching outcomes.
-- Orphan bank-credit detection.
-- Difference calculation and report totals.
-- Tenant isolation when evidence IDs are reused.
-- Rejection of mixed-tenant import pairs.
-- Auditor access, missing authentication, and missing application roles.
-- Invalid source types, import states, and request parameters.
-- Missing evidence for an import marked READY.
-- Preservation of import status and version during preview.
+The preview is bounded to protect memory use. It is not an unbounded, background reconciliation job.
 
-JWT decoding is mocked in these integration tests.
-Live Keycloak token acquisition is verified separately through Postman.
+### Stored runs and idempotency
+
+- `POST /api/reconciliation/runs` requires `ANALYST` and an `Idempotency-Key` header.
+- Each run stores selected import IDs, matching-rule and report-format versions, authenticated creator, UTC creation time, summary counts, and individual result snapshots.
+- Run creation and result persistence commit atomically; a failure rolls back both.
+- Retrieval reads the saved snapshot without rerunning matching.
+- A new key creates a run (`201`). Repeating the same key and request within the tenant returns the original run (`200`).
+- Reusing the key with different selected import IDs returns `409`.
+- Keys are tenant-scoped. Concurrent requests are coordinated through a database request record and locking.
+- Run history is paginated. Unresolved-result queries exclude matches and support filtering by mismatch outcome or orphan bank credits.
+
+### Exception investigation
+
+- An analyst opens a case against an unresolved stored run item: a settlement batch or orphan bank credit.
+- Matched results cannot open cases. Reopening the same run item returns its existing case rather than creating a duplicate.
+- Opening returns `200` for both a new and an existing case under the current API contract.
+- Cases start `OPEN`. Claiming transitions the case to `IN_REVIEW` and records the authenticated analyst as assignee.
+- Claims and note additions require the expected case version. Stale versions return `409`.
+- Only the assigned analyst may add investigation notes. Note insertion and case-version advancement commit atomically.
+- Notes record the authenticated author and creation time; no note update/delete API is exposed.
+- Allowed read roles can retrieve cases and notes within their tenant. Foreign-tenant cases return `404`.
+
+### Exception investigation queries
+
+- Paginated case listing supports optional `status` and `assignedToMe` filters.
+- `assignedToMe=true` uses the authenticated subject; callers do not supply another user's identity.
+- `assignedToMe=false` disables the assignment filter; it does not mean unassigned.
+- Cases are ordered by creation time descending, then ID descending.
+- Notes are ordered by creation time ascending, then ID ascending.
+- Pages are zero-based, default to 20 records, and allow sizes from 1 to 100.
+- Responses include `items`, `page`, `size`, `totalElements`, and `totalPages`.
+- Reads do not advance the case version. A missing/foreign case returns `404`; an existing case with no notes returns an empty page.
 
 ## Design patterns and data structures
 
@@ -220,8 +316,8 @@ Live Keycloak token acquisition is verified separately through Postman.
 | --- | --- |
 | Strategy | Interchangeable payment and bank matching contracts |
 | Adapter | CSV input converted into validated domain records; storage abstraction |
-| Repository | Tenant-scoped persistence and settlement writes |
-| Application service / transaction boundary | Lifecycle operations and atomic settlement completion |
+| Repository | Tenant-scoped evidence, run, and case persistence |
+| Application service / transaction boundary | Import completion, run creation, case claims, and note insertion |
 | Immutable records | Money, identities, matching results, and service snapshots |
 | HashMap | Candidate indexing and settlement-key validation |
 | HashSet | Duplicate IDs, reused lines, and orphan detection |
@@ -230,20 +326,65 @@ Live Keycloak token acquisition is verified separately through Postman.
 
 Matching and parser passes use expected linear-time indexing/grouping relative to their input sizes. The parser retains parsed records, so its memory use is O(n); upload streams bytes rather than loading the full file into memory.
 
-## Available API endpoints
+## API reference
 
 Base URL: `http://localhost:8083`
 
-| Method | Endpoint | Request format | Access |
-| --- | --- | --- | --- |
-| GET | `/actuator/health` | No body | Public |
-| GET | `/api/me` | No body | Any application role |
-| GET | `/api/imports/{importId}` | No body | Any application role; own tenant only |
-| POST | `/api/imports` | `application/json` | `IMPORTER` |
-| POST | `/api/imports` | `multipart/form-data` | `IMPORTER` |
-| POST | /api/imports/{importId}/process | Process an uploaded settlement import | IMPORTER |
+**Read roles** means any of `IMPORTER`, `ANALYST`, `APPROVER`, or `AUDITOR`. All protected resource operations are tenant-scoped.
 
-Use the access token as `Authorization: Bearer <access-token>`. Obtain a fresh token when it expires. Never commit tokens, passwords, or client secrets.
+| Method | Endpoint | Access / purpose |
+| --- | --- | --- |
+| GET | `/actuator/health` | Public health check |
+| GET | `/api/me` | Read roles; authenticated subject and tenant |
+| POST | `/api/imports` | `IMPORTER`; JSON metadata or multipart file upload |
+| GET | `/api/imports/{importId}` | Read roles; import details |
+| POST | `/api/imports/{importId}/process` | `IMPORTER`; process uploaded settlement or bank evidence |
+| GET | `/api/imports/{importId}/settlement-batches` | Read roles; paginated batches |
+| GET | `/api/imports/{importId}/settlement-batches/{batchId}/lines` | Read roles; paginated lines |
+| GET | `/api/reconciliation/bank-preview` | Read roles; selected settlement/bank import comparison |
+| POST | `/api/reconciliation/runs` | `ANALYST`; save a run with an idempotency key |
+| GET | `/api/reconciliation/runs` | Read roles; paginated history |
+| GET | `/api/reconciliation/runs/{runId}` | Read roles; stored snapshot |
+| GET | `/api/reconciliation/runs/{runId}/unresolved-results` | Read roles; paginated discrepancies |
+| POST | `/api/exception-cases` | `ANALYST`; open or retrieve a case for a run item |
+| GET | `/api/exception-cases` | Read roles; paginated cases and filters |
+| GET | `/api/exception-cases/{caseId}` | Read roles; case details and version |
+| POST | `/api/exception-cases/{caseId}/claim` | `ANALYST`; claim an open case |
+| POST | `/api/exception-cases/{caseId}/notes` | Assigned `ANALYST`; add a note |
+| GET | `/api/exception-cases/{caseId}/notes` | Read roles; paginated note history |
+
+Use `Authorization: Bearer <access-token>` on protected endpoints. Obtain a fresh token when it expires. Never commit tokens, passwords, or client secrets.
+
+### Response behavior
+
+| Scenario | Status |
+| --- | --- |
+| Registration, upload, new reconciliation run, or note creation | `201` |
+| Successful read, run replay, case opening/reopening, or case claim | `200` |
+| Invalid request, UUID, pagination, or idempotency key | `400` |
+| Missing, expired, or invalid token | `401` |
+| Insufficient role or unauthorized case-note author | `403` |
+| Missing or foreign-tenant resource | `404` |
+| Duplicate import, conflicting idempotency key, invalid lifecycle state, or stale version | `409` |
+| Upload exceeds configured limits | `413` |
+| Rejected CSV content during processing | `422` |
+| Technical storage or persistence failure | `500` |
+| Handled transient run/case lock contention | `503` |
+
+Application handlers return Problem Details with an additional `code` field. Security failures may have empty bodies. Use the returned code and current resource state to diagnose failures before retrying.
+
+## Postman workflow
+
+1. Start MySQL, Keycloak, and ReconBridge. Set `baseUrl` to `http://localhost:8083`.
+2. Obtain an importer token and upload a settlement CSV and bank CSV. Save each response `id`.
+3. Process each uploaded import using its current expected version. Confirm both reach `READY`.
+4. Use an analyst token to preview reconciliation and create a saved run.
+5. Save the returned run `id` as `reconciliationRunId`; retrieve its unresolved results.
+6. Open a case using an unresolved item's `itemType` and `evidenceId`.
+7. Claim the case, then add notes as that same analyst, supplying the latest case version each time.
+8. Use case listing and note history to review investigations. Verify auditor read access and cross-tenant denial.
+
+GET requests need a bearer token but no body or idempotency key. JSON POST requests use `Content-Type: application/json`.
 
 ### JSON metadata registration
 
@@ -273,23 +414,88 @@ Choose **Body -> form-data**:
 
 Let Postman generate the multipart `Content-Type` and boundary. Remove a manually set `application/json` header. The response's `id` is the import ID used by subsequent GET requests and database checks.
 
-### Response behavior
+### Create and retrieve a reconciliation run
 
-| Scenario | Status |
-| --- | --- |
-| Successful registration or upload | `201` |
-| Successful own-tenant lookup | `200` |
-| Invalid metadata, malformed import UUID, or invalid upload | `400` |
-| Missing, expired, or invalid token | `401` |
-| Insufficient role or unprovisioned tenant during registration | `403` |
-| Missing or foreign-tenant import | `404` |
-| Duplicate registered content | `409` |
-| Upload exceeds configured limits | `413` |
-| File storage failure | `500` |
+```http
+POST {{baseUrl}}/api/reconciliation/runs
+Authorization: Bearer <analyst-access-token>
+Content-Type: application/json
+Idempotency-Key: recon-run-001
+```
 
-Application error handlers use Problem Details with codes such as `DUPLICATE_IMPORT`, `IMPORT_NOT_FOUND`, and `VALIDATION_FAILED`. Security failures may have empty response bodies.
+```json
+{
+  "settlementImportId": "{{settlementImportId}}",
+  "bankImportId": "{{bankImportId}}"
+}
+```
 
-## Processor settlement CSV contract
+The key must contain 1–128 characters, begin with a letter or digit, and contain only letters, digits, periods, underscores, colons, or hyphens. Keep the same key for a retry of the same request; use a new key for an intentionally new run.
+
+```http
+GET {{baseUrl}}/api/reconciliation/runs/{{reconciliationRunId}}
+GET {{baseUrl}}/api/reconciliation/runs?page=0&size=20
+GET {{baseUrl}}/api/reconciliation/runs/{{reconciliationRunId}}/unresolved-results?outcome=AMOUNT_MISMATCH&page=0&size=20
+```
+
+Supported unresolved outcomes: `MISSING_COUNTERPART`, `AMBIGUOUS`, `AMOUNT_MISMATCH`, `CURRENCY_MISMATCH`, and `ORPHAN_BANK_CREDIT`. Omit `outcome` to return all unresolved results.
+
+### Open, claim, and annotate a case
+
+Open with an analyst token:
+
+```http
+POST {{baseUrl}}/api/exception-cases
+```
+
+```json
+{
+  "runId": "{{reconciliationRunId}}",
+  "itemType": "{{caseItemType}}",
+  "evidenceId": "{{caseEvidenceId}}"
+}
+```
+
+Use `BATCH` or `ORPHAN` for `caseItemType`, copied from the unresolved result. Save `details.id` as `exceptionCaseId` and `version` as `caseVersion`.
+
+```http
+POST {{baseUrl}}/api/exception-cases/{{exceptionCaseId}}/claim
+```
+
+```json
+{
+  "expectedVersion": {{caseVersion}}
+}
+```
+
+Update `caseVersion` from the successful claim response. Add a note using the same analyst identity:
+
+```http
+POST {{baseUrl}}/api/exception-cases/{{exceptionCaseId}}/notes
+```
+
+```json
+{
+  "expectedVersion": {{caseVersion}},
+  "text": "Reviewed the processor report and requested settlement advice."
+}
+```
+
+The note response contains the updated version under `exceptionCase.version`. Version placeholders above resolve to JSON numbers. Note creation is not request-idempotent; inspect current state/history before retrying an uncertain response.
+
+### Find assigned investigations and read notes
+
+```http
+GET {{baseUrl}}/api/exception-cases?status=OPEN&page=0&size=20
+GET {{baseUrl}}/api/exception-cases?status=IN_REVIEW&assignedToMe=true&page=0&size=20
+GET {{baseUrl}}/api/exception-cases/{{exceptionCaseId}}/notes?page=0&size=20
+```
+
+Use the claiming analyst's token for `assignedToMe=true`. An empty result may simply mean that the signed-in user has no assigned cases.
+
+## CSV contracts
+
+### Processor settlements
 
 ```csv
 batchId,settlementReference,bankAccountReference,declaredNetMinor,lineId,paymentReference,grossMinor,feeMinor,netMinor,currency
@@ -305,30 +511,55 @@ aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa,SETTLEMENT-001,BANK-ACCOUNT-001,37100,22222
 - Amounts use integer minor units, not decimal strings or floating-point values.
 - The earlier three-column upload fixture is not a valid settlement-processing file.
 
+### Bank statements
+
+```csv
+bank_credit_id,provider,bank_account_reference,settlement_reference,amount_minor,currency
+33333333-3333-4333-8333-333333333333,PROCESSOR_A,BANK-ACCOUNT-001,SETTLEMENT-001,37100,INR
+```
+
+- Each row represents one bank credit; credit IDs must be unique within the file.
+- `provider`, bank-account reference, and settlement reference must align with the corresponding settlement batch for key matching.
+- The provider is supplied per bank-credit row; the settlement provider comes from its import's `sourceSystem`.
+- Amounts use positive integer minor units. This sample matches the settlement total above.
+- Distinct credit IDs sharing a settlement key are retained so ambiguity can be reported.
+
 ## Persistence model
 
 ```mermaid
 erDiagram
     TENANT ||--o{ IMPORT_BATCH : owns
+    IMPORT_BATCH ||--o| IMPORT_UPLOADED_FILE : has
     IMPORT_BATCH ||--o{ SETTLEMENT_BATCH : contains
-    SETTLEMENT_BATCH ||--|{ SETTLEMENT_LINE : contains
+    SETTLEMENT_BATCH ||--o{ SETTLEMENT_LINE : contains
+    IMPORT_BATCH ||--o{ BANK_CREDIT : contains
+    IMPORT_BATCH ||--o{ RECONCILIATION_RUN : selected_as_settlement
+    IMPORT_BATCH ||--o{ RECONCILIATION_RUN : selected_as_bank
+    RECONCILIATION_RUN ||--o{ RECONCILIATION_RUN_ITEM : snapshots
+    RECONCILIATION_RUN ||--o| RECONCILIATION_RUN_REQUEST : linked_by_service
+    RECONCILIATION_RUN_ITEM ||--o| EXCEPTION_CASE : investigated_by
+    EXCEPTION_CASE ||--o{ INVESTIGATION_NOTE : records
 ```
 
-The diagram shows the intended complete batch structure; the foreign key alone does not enforce at least one child line.
+This is a logical relationship view. Composite foreign keys carry tenant identity. The request-to-run one-to-one relationship is maintained by the application flow; the foreign key alone does not make `run_id` unique. A persisted settlement batch requires valid lines through domain/service validation, not merely through its foreign key.
 
-| Table | Purpose and key constraints |
+| Table | Purpose |
 | --- | --- |
-| `tenant` | Provisioned tenants |
-| `import_batch` | Import source metadata, fingerprint, status, row count, and optimistic version |
-| `settlement_batch` | Primary key `(tenant_id, import_id, batch_id)`; unique settlement key within an import |
-| `settlement_line` | Primary key `(tenant_id, import_id, line_id)`; composite foreign key to its batch |
+| `tenant` | Provisioned tenant identities |
+| `import_batch` | Source metadata, fingerprint, lifecycle status, row count, and optimistic version |
+| `import_uploaded_file` | Server-owned file reference, SHA-256 hash, and size |
+| `settlement_batch` | Import-scoped settlement batch totals and matching keys |
+| `settlement_line` | Import-scoped payment references and gross/fee/net amounts |
+| `bank_credit` | Import-scoped bank credits; repeated matching keys remain possible |
+| `reconciliation_run` | Selected imports, rule/report versions, creator, timestamps, and summary |
+| `reconciliation_run_item` | Stored batch-result and orphan-credit snapshots |
+| `reconciliation_run_request` | Tenant-scoped idempotency key, request hash, and run reference |
+| `exception_case` | Unique case per tenant/run/item/evidence; assignment, status, and version |
+| `investigation_note` | Case-scoped author, text, and creation time |
 
-Migrations added:
+Flyway evolves this schema through versioned migrations. Inspect the repository's migration directory for authoritative filenames and versions; never edit an already-applied migration to introduce a new feature.
 
-- `V1__create_tenant_and_import_batch.sql`
-- `V2__create_settlement_tables.sql` (or the next unused version if V2 was already allocated locally)
-
-Payment references are indexed, not unique. Provider and currency live on the parent batch. Database checks validate each line's arithmetic; the domain model validates totals across lines. The same source IDs may exist in separate imports, so future reconciliation must select imports explicitly.
+Payment references are indexed rather than globally unique. Source IDs may repeat in different imports, so reconciliation explicitly selects imports. Case uniqueness is per stored run item; it does not deduplicate the same business discrepancy across different runs.
 
 ## Local configuration
 
@@ -437,6 +668,10 @@ Rebuilds the project and executes unit and integration tests. MySQL and the test
 .\mvnw.cmd "-Dtest=ImportUploadIntegrationTest" test
 .\mvnw.cmd "-Dtest=SettlementCsvParserTest" test
 .\mvnw.cmd "-Dtest=SettlementPersistenceServiceIntegrationTest" test
+.\mvnw.cmd "-Dtest=BankCreditPersistenceServiceIntegrationTest" test
+.\mvnw.cmd "-Dtest=ReconciliationQueryIntegrationTest" test
+.\mvnw.cmd "-Dtest=ExceptionCaseControllerIntegrationTest" test
+.\mvnw.cmd "-Dtest=ExceptionCaseQueryIntegrationTest" test
 ```
 
 Runs the selected feature's tests to isolate failures. Parser tests do not require MySQL or Keycloak; HTTP security integration tests mock JWT decoding rather than acquiring live tokens.
@@ -469,132 +704,60 @@ git diff --stat
 
 Lists migration versions before creating another migration, then summarizes local Git changes. Preserve applied migrations and stage only intended source, test, sample, and documentation files.
 
-## Verification coverage
+## Testing and verification
 
-The latest local build was reported successful after adding transactional settlement persistence. With the supplied test classes unchanged, the expected suite contains **144 tests**; use the actual Maven summary as the authoritative count.
+Run `./mvnw test` on a compatible Unix shell or `.\mvnw.cmd clean test` in Windows PowerShell. Use the latest Maven Surefire summary as the authoritative test count; this README does not pin a total that becomes stale as features are added.
 
-Coverage includes:
+Coverage spans:
 
-- Monetary calculations, matching decisions, ambiguity, orphan detection, and combined reports.
-- Flyway migrations, persistence constraints, tenant isolation, and import lifecycle guards.
-- Expected-version checks and overlapping-transaction optimistic locking scenarios.
-- JWT claim validation and HTTP authorization.
-- Duplicate registration, concurrent registration, and continued operation after rollback.
-- Uploaded bytes, SHA-256 calculation, partial-file cleanup, and duplicate-file preservation.
-- CSV structure, encoding, amounts, totals, identifiers, row limits, and technical read errors.
-- Atomic settlement completion, foreign-tenant rejection, stale completion rejection, and rollback after a later insert fails.
+- Money arithmetic, matching outcomes, ambiguity, orphan detection, and combined domain reports.
+- Flyway migrations, relational constraints, import lifecycle guards, and tenant isolation.
+- Expected-version validation and competing-worker concurrency scenarios.
+- JWT claims, role mapping, authenticated identity, and HTTP authorization.
+- Duplicate/concurrent import registration and rollback behavior.
+- Uploaded bytes, SHA-256 verification, file ownership, missing/modified files, and cleanup paths.
+- CSV structure, encoding, identifiers, amounts, totals, duplicate IDs, and configured limits.
+- Atomic settlement/bank persistence and rollback after a later insert fails.
+- Reconciliation preview, saved snapshots, request idempotency, and concurrent requests.
+- Paginated run history, unresolved filters, and stable ordering.
+- Case creation, claiming, expected versions, author restrictions, and atomic note writes.
+- Latest case-query tests: pagination, assignment/status filters, note ordering, empty results, tenant boundaries, and authorization.
 
-Manual Postman checks covered identity, own-tenant retrieval, cross-tenant denial, missing authentication, registration, duplicate handling, actual upload, and auditor POST denial. MockMvc storage-limit tests do not establish the real servlet container's multipart size-limit behavior; verify that through an actual HTTP upload.
+Database integration tests require the test MySQL schema and credentials. HTTP security integration tests mock JWT decoding; Postman checks with real Keycloak tokens verify the manual authentication flow separately.
 
-### Exception investigation queries
+The latest case-query milestone must pass its focused tests and the complete suite before it is treated as locally verified. A successful earlier build does not validate newly added code.
 
-- Paginated exception-case listing scoped to the authenticated tenant.
-- Optional filtering by case status and assignment to the current user.
-- Paginated investigation-note history in chronological order.
-- Deterministic ordering using creation timestamps and UUID tie-breakers.
-- Pagination validation with a maximum page size of 100.
-- Read access for IMPORTER, ANALYST, APPROVER, and AUDITOR roles.
-- Cross-tenant case-note requests return 404.
-- Integration coverage for pagination, filtering, tenant isolation,
-  role authorization, empty results, and invalid parameters.
-
-Endpoints:
-
-- GET /api/exception-cases
-- GET /api/exception-cases/{caseId}/notes
-
-Query examples:
-
-- /api/exception-cases?status=OPEN&page=0&size=20
-- /api/exception-cases?status=IN_REVIEW&assignedToMe=true
-- /api/exception-cases/{caseId}/notes?page=0&size=20
-
+MockMvc tests do not establish the real servlet container's multipart limit enforcement. Verify that separately through an actual HTTP upload.
 
 ## Current limitations
 
-- There is no processing HTTP endpoint or background worker connecting upload, file retrieval, hash re-verification, parsing, and persistence yet.
-- Parsing returns in-memory domain batches; it is not automatically triggered by upload.
-- Retry transitions exist, but automatic restart/recovery and abandoned `PROCESSING` detection are not implemented.
-- Local files and MySQL commits are not atomic. Known failures trigger cleanup, but crashes, cleanup failures, or uncertain commit outcomes can leave files requiring recovery. Automated orphan cleanup is planned.
-- Local storage is not a shared multi-instance deployment solution.
-- Internal payment and bank statement parsers/persistence are not implemented yet, although their domain models and matching strategies exist.
-- Exception investigation, independent approval, and audit workflow are planned features.
-- No live bank integrations or payment initiation are implemented.
+- Internal-payment matching exists in the domain, but persistent internal-payment ingestion and stored full three-source reconciliation are not implemented.
+- Import processing is synchronous. Upload alone does not start processing.
+- Retry transitions exist at the service layer, but automatic restart/recovery, retry orchestration, abandoned `PROCESSING` detection, and persisted processing-error history remain planned.
+- Local files and MySQL commits are not atomic. Cleanup handles known failures, but crashes or uncertain commit outcomes can leave files requiring recovery.
+- Local filesystem storage is not a shared multi-instance deployment solution.
+- Parsers and reconciliation retain bounded data in memory; this is not a large-scale streaming processing system.
+- Offset pagination has deterministic ordering for unchanged data, but separate page requests do not share a snapshot. Concurrent inserts can shift page boundaries.
+- Investigation notes and creator metadata provide traceability, not a complete tamper-evident audit system.
+- Resolution proposals, independent approval, and final resolution transitions remain planned.
+- Kafka, transactional outbox, Testcontainers, CI deployment automation, and Kubernetes are not implemented capabilities.
+- No live bank integration or payment initiation is implemented.
 
-### End-to-end settlement import processing
+## Roadmap
 
-- Added POST /api/imports/{importId}/process, restricted to IMPORTER.
-- Verifies tenant ownership and server-recorded file ownership.
-- Claims RECEIVED imports using the expected optimistic version.
-- Reads the stored file and verifies its SHA-256 hash before parsing.
-- Persists settlement batches and lines together with the READY transition.
-- Marks invalid CSV as REJECTED and technical failures as FAILED when
-  the failure transition can be committed.
-- Prevents stale workers from overwriting newer import state.
-- Includes integration tests for processing, authorization, integrity
-  failures, competing requests, and transaction rollback.
-
-Processing is currently synchronous. Automatic recovery of abandoned
-PROCESSING imports, retry endpoints, and persisted error history remain planned.
-
-### Bank statement processing
-
-The existing POST /api/imports/{importId}/process endpoint now dispatches
-PROCESSOR_SETTLEMENT and BANK_STATEMENT imports to their respective processors.
-
-Bank processing:
-1. Claims a tenant-owned RECEIVED import using its expected version.
-2. Requires server-managed uploaded-file ownership.
-3. Reads the stored file and verifies its SHA-256 hash.
-4. Parses and validates bank-credit CSV records.
-5. Persists credits and transitions the import to READY atomically.
-
-Invalid CSV contents result in REJECTED. Storage and persistence failures
-result in FAILED when that state transition can be committed.
-Stale workers cannot overwrite a newer import version.
-
-Integration tests cover successful processing, invalid CSV, missing and
-modified files, replay prevention, tenant isolation, role enforcement,
-and overlapping processing requests.
-
-Internal payment processing and automatic retry/recovery remain unimplemented.
-
-### Stored bank reconciliation runs
-
-POST /api/reconciliation/runs calculates and saves a bank reconciliation
-report using two tenant-owned READY imports. Creation requires ANALYST.
-
-GET /api/reconciliation/runs/{runId} retrieves the stored snapshot.
-IMPORTER, ANALYST, APPROVER, and AUDITOR may read runs within their tenant.
-
-Each run stores its selected import IDs, matching-rule version,
-report-format version, authenticated creator, UTC creation time,
-summary counts, and individual result snapshots.
-
-Run creation is atomic: failures roll back the run and all result rows.
-Retrieval does not rerun matching.
-
-Each successful POST creates a new run. Request idempotency,
-investigation workflow, approvals, and background execution are not
-implemented in this milestone.
-
-Integration tests cover persistence, retrieval, authorization,
-tenant isolation, request validation, and transactional rollback.
-
-## Next milestones
-
-1. Connect tenant-scoped import claiming, stored-file reading, hash verification, parsing, and atomic persistence.
-2. Classify invalid contents as `REJECTED` and technical failures as `FAILED`, while protecting against stale workers; expose a secured processing endpoint and test it.
-3. Add persisted processing-error details, retry/recovery behavior, and orphan-file handling.
-4. Add internal payment and bank statement ingestion and reconciliation over explicitly selected persisted imports.
-5. Add exception investigation, independent approval, and audit history.
-6. Introduce transactional outbox delivery and Kafka with failure-recovery tests.
-7. Add reproducible container setup, Testcontainers, CI, observability, and a documented demo.
-8. Add Kubernetes deployment and recovery exercises after the processing and storage model supports them.
+1. Implement resolution proposals by the assigned analyst, then approval/rejection by a different authenticated user with `APPROVER` authority.
+2. Persist decision history and enforce optimistic versions and separation of duties, including when one user holds multiple roles.
+3. Add processing-error history, safe retry/recovery, and orphan-file handling.
+4. Add internal-payment ingestion and stored reconciliation across all three evidence sources.
+5. Introduce transactional outbox delivery and Kafka, with duplicate-delivery and failure-recovery tests.
+6. Add reproducible container setup, Testcontainers, CI, observability, and a documented demonstration.
+7. Add Kubernetes deployment and recovery exercises after processing and storage support multiple instances.
 
 ## Project documentation
 
-See [Project requirements and architecture](docs/ReconBridge_Project_Requirements_and_Architecture.docx) for design diagrams and a PowerShell command reference. The document includes planned architecture; the implementation status and boundaries above describe this checkpoint.
+See [Project requirements and architecture](docs/ReconBridge_Project_Requirements_and_Architecture.docx) for diagrams, design decisions, and the PowerShell command reference. Keep that file at the linked repository path.
+
+The architecture document includes planned features and may lag the latest implementation milestones. Check its version/checkpoint before treating every diagram as implemented behavior. This README update does not update the DOCX itself.
 
 ## Scope
 
