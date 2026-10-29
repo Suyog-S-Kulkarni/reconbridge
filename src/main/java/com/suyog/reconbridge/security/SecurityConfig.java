@@ -81,7 +81,10 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/reconciliation/runs"
+                                "/api/reconciliation/runs",
+                                "/api/exception-cases",
+                                "/api/exception-cases/{caseId}/claim",
+                                "/api/exception-cases/{caseId}/notes"
                         )
                         .hasRole("ANALYST")
 
@@ -101,7 +104,8 @@ public class SecurityConfig {
                                 "/api/reconciliation/bank-preview",
                                 "/api/reconciliation/runs",
                                 "/api/reconciliation/runs/{runId}",
-                                "/api/reconciliation/runs/{runId}/unresolved-results"
+                                "/api/reconciliation/runs/{runId}/unresolved-results",
+                                "/api/exception-cases/{caseId}"
                         )
                         .hasAnyRole(
                                 "IMPORTER",
