@@ -105,7 +105,9 @@ public class SecurityConfig {
                                 "/api/reconciliation/runs",
                                 "/api/reconciliation/runs/{runId}",
                                 "/api/reconciliation/runs/{runId}/unresolved-results",
-                                "/api/exception-cases/{caseId}"
+                                "/api/exception-cases",
+                                "/api/exception-cases/{caseId}",
+                                "/api/exception-cases/{caseId}/notes"
                         )
                         .hasAnyRole(
                                 "IMPORTER",

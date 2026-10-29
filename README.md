@@ -486,6 +486,30 @@ Coverage includes:
 
 Manual Postman checks covered identity, own-tenant retrieval, cross-tenant denial, missing authentication, registration, duplicate handling, actual upload, and auditor POST denial. MockMvc storage-limit tests do not establish the real servlet container's multipart size-limit behavior; verify that through an actual HTTP upload.
 
+### Exception investigation queries
+
+- Paginated exception-case listing scoped to the authenticated tenant.
+- Optional filtering by case status and assignment to the current user.
+- Paginated investigation-note history in chronological order.
+- Deterministic ordering using creation timestamps and UUID tie-breakers.
+- Pagination validation with a maximum page size of 100.
+- Read access for IMPORTER, ANALYST, APPROVER, and AUDITOR roles.
+- Cross-tenant case-note requests return 404.
+- Integration coverage for pagination, filtering, tenant isolation,
+  role authorization, empty results, and invalid parameters.
+
+Endpoints:
+
+- GET /api/exception-cases
+- GET /api/exception-cases/{caseId}/notes
+
+Query examples:
+
+- /api/exception-cases?status=OPEN&page=0&size=20
+- /api/exception-cases?status=IN_REVIEW&assignedToMe=true
+- /api/exception-cases/{caseId}/notes?page=0&size=20
+
+
 ## Current limitations
 
 - There is no processing HTTP endpoint or background worker connecting upload, file retrieval, hash re-verification, parsing, and persistence yet.
@@ -534,6 +558,28 @@ modified files, replay prevention, tenant isolation, role enforcement,
 and overlapping processing requests.
 
 Internal payment processing and automatic retry/recovery remain unimplemented.
+
+### Stored bank reconciliation runs
+
+POST /api/reconciliation/runs calculates and saves a bank reconciliation
+report using two tenant-owned READY imports. Creation requires ANALYST.
+
+GET /api/reconciliation/runs/{runId} retrieves the stored snapshot.
+IMPORTER, ANALYST, APPROVER, and AUDITOR may read runs within their tenant.
+
+Each run stores its selected import IDs, matching-rule version,
+report-format version, authenticated creator, UTC creation time,
+summary counts, and individual result snapshots.
+
+Run creation is atomic: failures roll back the run and all result rows.
+Retrieval does not rerun matching.
+
+Each successful POST creates a new run. Request idempotency,
+investigation workflow, approvals, and background execution are not
+implemented in this milestone.
+
+Integration tests cover persistence, retrieval, authorization,
+tenant isolation, request validation, and transactional rollback.
 
 ## Next milestones
 
