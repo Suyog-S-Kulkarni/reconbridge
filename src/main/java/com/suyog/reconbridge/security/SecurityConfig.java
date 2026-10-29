@@ -99,7 +99,9 @@ public class SecurityConfig {
                                 "/api/imports/{importId}/settlement-batches",
                                 "/api/imports/{importId}/settlement-batches/{batchId}/lines",
                                 "/api/reconciliation/bank-preview",
-                                "/api/reconciliation/runs/{runId}"
+                                "/api/reconciliation/runs",
+                                "/api/reconciliation/runs/{runId}",
+                                "/api/reconciliation/runs/{runId}/unresolved-results"
                         )
                         .hasAnyRole(
                                 "IMPORTER",
