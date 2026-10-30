@@ -31,13 +31,13 @@ public record ExceptionCase(
             );
         }
 
-        if (status == ExceptionCaseStatus.OPEN && assignedTo != null) {
-            throw new IllegalArgumentException(
-                    "An OPEN case must not have an assignee."
-            );
-        }
-
-        if (status == ExceptionCaseStatus.IN_REVIEW) {
+        if (status == ExceptionCaseStatus.OPEN) {
+            if (assignedTo != null) {
+                throw new IllegalArgumentException(
+                        "An OPEN case must not have an assignee."
+                );
+            }
+        } else {
             requireSubject(assignedTo);
         }
     }
@@ -60,18 +60,10 @@ public record ExceptionCase(
         );
     }
 
-    public ExceptionCase claim(
-            String actor,
-            Instant now
-    ) {
+    public ExceptionCase claim(String actor, Instant now) {
         requireSubject(actor);
         requireTime(now);
-
-        if (status != ExceptionCaseStatus.OPEN) {
-            throw new IllegalStateException(
-                    "Only an OPEN case can be claimed."
-            );
-        }
+        requireStatus(ExceptionCaseStatus.OPEN);
 
         return new ExceptionCase(
                 id,
@@ -92,18 +84,8 @@ public record ExceptionCase(
     ) {
         requireSubject(actor);
         requireTime(now);
-
-        if (status != ExceptionCaseStatus.IN_REVIEW) {
-            throw new IllegalStateException(
-                    "Claim the case before adding investigation notes."
-            );
-        }
-
-        if (!assignedTo.equals(actor)) {
-            throw new IllegalStateException(
-                    "Only the assigned analyst can add investigation notes."
-            );
-        }
+        requireStatus(ExceptionCaseStatus.IN_REVIEW);
+        requireAssignee(actor);
 
         return new InvestigationNote(
                 UUID.randomUUID(),
@@ -113,6 +95,68 @@ public record ExceptionCase(
                 text,
                 now
         );
+    }
+
+    public ExceptionCase awaitApproval(
+            String actor,
+            Instant now
+    ) {
+        requireSubject(actor);
+        requireTime(now);
+        requireStatus(ExceptionCaseStatus.IN_REVIEW);
+        requireAssignee(actor);
+
+        return withStatus(
+                ExceptionCaseStatus.AWAITING_APPROVAL,
+                now
+        );
+    }
+
+    public ExceptionCase resolve(Instant now) {
+        requireTime(now);
+        requireStatus(ExceptionCaseStatus.AWAITING_APPROVAL);
+
+        return withStatus(ExceptionCaseStatus.RESOLVED, now);
+    }
+
+    public ExceptionCase resumeInvestigation(Instant now) {
+        requireTime(now);
+        requireStatus(ExceptionCaseStatus.AWAITING_APPROVAL);
+
+        return withStatus(ExceptionCaseStatus.IN_REVIEW, now);
+    }
+
+    private ExceptionCase withStatus(
+            ExceptionCaseStatus nextStatus,
+            Instant now
+    ) {
+        return new ExceptionCase(
+                id,
+                tenantId,
+                evidence,
+                nextStatus,
+                createdBy,
+                assignedTo,
+                createdAt,
+                now
+        );
+    }
+
+    private void requireAssignee(String actor) {
+        if (!actor.equals(assignedTo)) {
+            throw new IllegalStateException(
+                    "Only the assigned analyst can perform this operation."
+            );
+        }
+    }
+
+    private void requireStatus(ExceptionCaseStatus expected) {
+        if (status != expected) {
+            throw new IllegalStateException(
+                    "Case must be " + expected
+                            + " for this operation, but is " + status + "."
+            );
+        }
     }
 
     private void requireTime(Instant now) {

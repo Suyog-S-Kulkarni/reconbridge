@@ -4,5 +4,9 @@ public enum ExceptionCaseStatus {
 
     OPEN,
 
-    IN_REVIEW
+    IN_REVIEW,
+
+    AWAITING_APPROVAL,
+
+    RESOLVED
 }
