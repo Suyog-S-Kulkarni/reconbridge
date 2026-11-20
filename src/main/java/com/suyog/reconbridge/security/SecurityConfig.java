@@ -68,9 +68,7 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS
-                        )
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
@@ -80,11 +78,25 @@ public class SecurityConfig {
                         .permitAll()
 
                         .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/resolution-proposals/pending"
+                        )
+                        .hasRole("APPROVER")
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/exception-cases/{caseId}/proposals/{proposalId}/approve",
+                                "/api/exception-cases/{caseId}/proposals/{proposalId}/reject"
+                        )
+                        .hasRole("APPROVER")
+
+                        .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/reconciliation/runs",
                                 "/api/exception-cases",
                                 "/api/exception-cases/{caseId}/claim",
-                                "/api/exception-cases/{caseId}/notes"
+                                "/api/exception-cases/{caseId}/notes",
+                                "/api/exception-cases/{caseId}/proposals"
                         )
                         .hasRole("ANALYST")
 
@@ -107,7 +119,9 @@ public class SecurityConfig {
                                 "/api/reconciliation/runs/{runId}/unresolved-results",
                                 "/api/exception-cases",
                                 "/api/exception-cases/{caseId}",
-                                "/api/exception-cases/{caseId}/notes"
+                                "/api/exception-cases/{caseId}/notes",
+                                "/api/exception-cases/{caseId}/proposals",
+                                "/api/exception-cases/{caseId}/proposals/{proposalId}"
                         )
                         .hasAnyRole(
                                 "IMPORTER",
