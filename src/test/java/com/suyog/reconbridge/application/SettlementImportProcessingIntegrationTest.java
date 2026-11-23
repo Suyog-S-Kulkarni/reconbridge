@@ -218,27 +218,31 @@ class SettlementImportProcessingIntegrationTest {
     }
 
     @Test
-    void wrongSourceCannotBeClaimed() throws Exception {
+    void wrongSourceCannotBeClaimed(
+            @org.springframework.beans.factory.annotation.Autowired
+            com.suyog.reconbridge.application.SettlementImportClaimService claims
+    ) throws Exception {
         UUID id = upload(VALID, "INTERNAL_PAYMENT");
 
-        process("a", id, 0)
-                .andExpect(status().isConflict())
-                .andExpect(
-                        jsonPath("$.code").value("UNSUPPORTED_SOURCE")
-                );
+        var before = lifecycle.get(tenantA, id);
 
-        ImportBatchSnapshot current = lifecycle.get(tenantA, id);
+        var exception = org.junit.jupiter.api.Assertions.assertThrows(
+                com.suyog.reconbridge.application.exception
+                        .ImportProcessingConflictException.class,
+                () -> claims.claim(
+                        tenantA,
+                        id,
+                        before.version()
+                )
+        );
 
-        assertThat(current.status())
-                .isEqualTo(ImportStatus.RECEIVED);
+        org.junit.jupiter.api.Assertions.assertNotNull(exception);
 
-        assertThat(current.version())
-                .isZero();
-
-        assertThat(current.rowCount())
-                .isZero();
-
-        assertNoEvidence(id);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                before,
+                lifecycle.get(tenantA, id),
+                "A wrong-source claim must not change the import."
+        );
     }
 
     @Test

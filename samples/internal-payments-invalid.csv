@@ -1,0 +1,2 @@
+payment_id,payment_reference,amount_minor,currency
+77777777-7777-4777-8777-777777777777,PAY-INVALID-001,-100,INR

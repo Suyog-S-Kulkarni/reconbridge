@@ -1,6 +1,5 @@
 package com.suyog.reconbridge.application;
 
-import com.suyog.reconbridge.application.exception.ImportProcessingConflictException;
 import com.suyog.reconbridge.application.model.ImportBatchSnapshot;
 import com.suyog.reconbridge.application.model.ImportProcessingResult;
 import org.springframework.stereotype.Service;
@@ -15,15 +14,18 @@ public class ImportProcessingService {
     private final ImportLifecycleService lifecycle;
     private final SettlementImportProcessingService settlementProcessing;
     private final BankImportProcessingService bankProcessing;
+    private final InternalPaymentImportProcessingService paymentProcessing;
 
     public ImportProcessingService(
             ImportLifecycleService lifecycle,
             SettlementImportProcessingService settlementProcessing,
-            BankImportProcessingService bankProcessing
+            BankImportProcessingService bankProcessing,
+            InternalPaymentImportProcessingService paymentProcessing
     ) {
         this.lifecycle = lifecycle;
         this.settlementProcessing = settlementProcessing;
         this.bankProcessing = bankProcessing;
+        this.paymentProcessing = paymentProcessing;
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -53,9 +55,10 @@ public class ImportProcessingService {
                     );
 
             case INTERNAL_PAYMENT ->
-                    throw new ImportProcessingConflictException(
-                            "UNSUPPORTED_SOURCE",
-                            "Internal payment processing is not implemented yet."
+                    paymentProcessing.process(
+                            tenantId,
+                            importId,
+                            expectedVersion
                     );
         };
     }
