@@ -28,10 +28,7 @@ import java.util.Set;
 public class SecurityConfig {
 
     private static final Set<String> APPLICATION_ROLES = Set.of(
-            "IMPORTER",
-            "ANALYST",
-            "APPROVER",
-            "AUDITOR"
+            "IMPORTER", "ANALYST", "APPROVER", "AUDITOR"
     );
 
     @Bean
@@ -68,15 +65,10 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS
-                        )
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/actuator/health"
-                        )
+                        .requestMatchers(HttpMethod.GET, "/actuator/health")
                         .permitAll()
 
                         .requestMatchers(
@@ -117,6 +109,7 @@ public class SecurityConfig {
                                 "/api/imports/{importId}/settlement-batches",
                                 "/api/imports/{importId}/settlement-batches/{batchId}/lines",
                                 "/api/reconciliation/bank-preview",
+                                "/api/reconciliation/three-source-preview",
                                 "/api/reconciliation/runs",
                                 "/api/reconciliation/runs/{runId}",
                                 "/api/reconciliation/runs/{runId}/unresolved-results",
@@ -127,14 +120,10 @@ public class SecurityConfig {
                                 "/api/exception-cases/{caseId}/proposals/{proposalId}"
                         )
                         .hasAnyRole(
-                                "IMPORTER",
-                                "ANALYST",
-                                "APPROVER",
-                                "AUDITOR"
+                                "IMPORTER", "ANALYST", "APPROVER", "AUDITOR"
                         )
 
-                        .anyRequest()
-                        .denyAll()
+                        .anyRequest().denyAll()
                 )
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt
@@ -145,9 +134,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    private Collection<GrantedAuthority> applicationAuthorities(
-            Jwt jwt
-    ) {
+    private Collection<GrantedAuthority> applicationAuthorities(Jwt jwt) {
         Object realmAccess = jwt.getClaims().get("realm_access");
 
         if (!(realmAccess instanceof Map<?, ?> realmMap)) {
