@@ -68,7 +68,9 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                        .sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
@@ -111,6 +113,7 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/me",
                                 "/api/imports/{importId}",
+                                "/api/imports/{importId}/payments",
                                 "/api/imports/{importId}/settlement-batches",
                                 "/api/imports/{importId}/settlement-batches/{batchId}/lines",
                                 "/api/reconciliation/bank-preview",
