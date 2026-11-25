@@ -25,7 +25,7 @@ public record ThreeSourceReconciliationPreview(
         List<OrphanSettlementLine> orphanSettlementLines,
         List<BankReconciliationPreview.BatchResult> bankResults,
         List<BankReconciliationPreview.OrphanCredit> orphanBankCredits
-) {
+) implements ReconciliationReportSnapshot {
 
     public ThreeSourceReconciliationPreview {
         paymentOutcomeCounts = Map.copyOf(paymentOutcomeCounts);

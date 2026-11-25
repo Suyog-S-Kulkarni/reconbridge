@@ -16,7 +16,7 @@ public record BankReconciliationPreview(
         boolean fullyReconciled,
         List<BatchResult> results,
         List<OrphanCredit> orphanBankCredits
-) {
+) implements ReconciliationReportSnapshot {
 
     public BankReconciliationPreview {
         results = List.copyOf(results);
@@ -33,7 +33,6 @@ public record BankReconciliationPreview(
             Long differenceMinor,
             String differenceCurrency
     ) {
-
         public BatchResult {
             candidateBankCreditIds = List.copyOf(
                     candidateBankCreditIds
